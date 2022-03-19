@@ -6,7 +6,7 @@ This project is a simple script that reads eth client data and presents the curr
 
 The first step is to install geth: https://geth.ethereum.org/docs/install-and-build/installing-geth
 
-Once you have that on your system, I highly recommend spinning up a ~light client~ as it's much quicker to operate and provides the necessary data
+Once you have that on your system, I highly recommend spinning up a _light client_ as it's much quicker to operate and provides the necessary data
 
 ```
 geth --syncmode "light" --ws
