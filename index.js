@@ -46,4 +46,15 @@ sub.on("data", function (blockHeader) {
   );
 });
 
-sub.on("error", ({ reason }) => console.error(reason));
+sub.on("error", ({ reason }) => {
+  console.error(reason);
+});
+
+// restore hidden cursor for convenience
+process.on("SIGINT", () => {
+  process.stdout.write("\u001b[?25h");
+  process.exit(2);
+});
+process.on("exit", () => {
+  process.stdout.write("\u001b[?25h");
+});
