@@ -8,6 +8,9 @@ const web3 = new Web3("ws://127.0.0.1:8546");
 
 let sub = web3.eth.subscribe("newBlockHeaders");
 
+// hide cursor
+process.stdout.write("\u001b[?25l");
+
 // Console output string builder
 const buildInfoString = (block, utilization, gas_price) =>
   `New Block (${block})
