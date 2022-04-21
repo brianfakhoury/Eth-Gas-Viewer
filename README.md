@@ -1,5 +1,7 @@
 # Eth Gas Viewer
 
+![](./screenshot.png)
+
 This project is a simple script that reads eth client data and presents the current gas environment in realtime. I built this because etherscan and other websites struggle to offer a realtime view with enough context besides recommendations on what gas prices to use.
 
 ## How to run
