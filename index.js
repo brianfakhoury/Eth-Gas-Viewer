@@ -11,7 +11,7 @@ let sub = web3.eth.subscribe("newBlockHeaders");
 
 // Console output string builder
 const buildInfoString = (block, utilization, gas_price) =>
-  `New Block (${block}), Total Gas Used ${chalk.bgWhiteBright.bold.redBright(
+  `${new Date().toLocaleTimeString()} | New Block (${block}), Total Gas Used ${chalk.bgWhiteBright.bold.redBright(
     Math.round(utilization * 100) + "%"
   )}, Upcoming Base Fee will be ${chalk.bgWhiteBright.bold.redBright(
     Math.round((100 * gas_price) / 1e9) / 100 + " Gwei"
