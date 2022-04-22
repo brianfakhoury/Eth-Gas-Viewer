@@ -13,18 +13,44 @@ process.stdout.write("\u001b[?25l");
 
 // Console output string builder
 const buildInfoString = (block, utilization, gas_price) =>
-  `New Block (${block})
-Total Gas Used ${chalk.bgWhiteBright.bold.redBright(
-    Math.round(utilization * 100) + "%"
-  )}
-Upcoming Base Fee will be ${chalk.bgWhiteBright.bold.redBright(
+  `New Block (${block.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")})
+Total Gas Used ${chalk.bold.redBright(Math.round(utilization * 100) + "%")}
+Upcoming Base Fee will be ${chalk.bold.redBright(
     Math.round((100 * gas_price) / 1e9) / 100 + " Gwei"
   )}.
   `;
 
+const buildHighlightedInfoString = (block, utilization, gas_price) =>
+  `New Block (${block.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")})
+Total Gas Used ${chalk.bgRedBright.bold.whiteBright(
+    Math.round(utilization * 100) + "%"
+  )}
+Upcoming Base Fee will be ${chalk.bgRedBright.bold.whiteBright(
+    Math.round((100 * gas_price) / 1e9) / 100 + " Gwei"
+  )}.
+    `;
+
+const buildConsoleBox = (highlight = false, params) =>
+  boxen(
+    highlight
+      ? buildHighlightedInfoString(...params)
+      : buildInfoString(...params),
+    {
+      title: `Updated: ${new Date().toLocaleTimeString()}`,
+      titleAlignment: "center",
+      borderStyle: "double",
+      padding: 1,
+      float: "center",
+      width: 50,
+    }
+  );
+
 sub.on("connected", function (subscriptionId) {
   console.log("Listening for new blocks...\n");
 });
+
+// prevent race conditions by storing string invariants globally
+let latest_data = [];
 
 sub.on("data", function (blockHeader) {
   // can't do anything unless we know the previous blocks data
@@ -34,16 +60,18 @@ sub.on("data", function (blockHeader) {
   const next_gas_price =
     blockHeader.baseFeePerGas * (1 + (0.125 * (utilization - 0.5)) / 0.5);
 
+  latest_data = [blockHeader.number, utilization, next_gas_price];
+
+  // publish latest info highlighted, override previous data
   console.clear();
-  console.log(
-    boxen(buildInfoString(blockHeader.number, utilization, next_gas_price), {
-      title: `Updated: ${new Date().toLocaleTimeString()}`,
-      titleAlignment: "center",
-      borderStyle: "double",
-      padding: 1,
-      float: "center",
-    })
-  );
+  console.log(buildConsoleBox(true, latest_data));
+
+  // remove highlighting after 2000ms
+  // do not use old data if new headers received
+  setTimeout(() => {
+    console.clear();
+    console.log(buildConsoleBox(false, latest_data));
+  }, 2000);
 });
 
 sub.on("error", ({ reason }) => {
