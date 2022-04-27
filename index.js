@@ -12,16 +12,16 @@ let sub = web3.eth.subscribe("newBlockHeaders");
 process.stdout.write("\u001b[?25l");
 
 // Console output string builder
-const buildInfoString = (block, utilization, gas_price) =>
-  `New Block (${block.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")})
+const buildInfoString = ({ number }, utilization, gas_price) =>
+  `New Block (${number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")})
 Total Gas Used ${chalk.bold.redBright(Math.round(utilization * 100) + "%")}
 Upcoming Base Fee will be ${chalk.bold.redBright(
     Math.round((100 * gas_price) / 1e9) / 100 + " Gwei"
   )}.
   `;
 
-const buildHighlightedInfoString = (block, utilization, gas_price) =>
-  `New Block (${block.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")})
+const buildHighlightedInfoString = ({ number }, utilization, gas_price) =>
+  `New Block (${number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")})
 Total Gas Used ${chalk.bgRedBright.bold.whiteBright(
     Math.round(utilization * 100) + "%"
   )}
@@ -36,7 +36,9 @@ const buildConsoleBox = (highlight = false, params) =>
       ? buildHighlightedInfoString(...params)
       : buildInfoString(...params),
     {
-      title: `Updated: ${new Date().toLocaleTimeString()}`,
+      title: `Block Time: ${new Date(
+        params[0].timestamp * 1000
+      ).toLocaleTimeString()}`,
       titleAlignment: "center",
       borderStyle: "double",
       padding: 1,
@@ -51,16 +53,30 @@ sub.on("connected", function (subscriptionId) {
 
 // prevent race conditions by storing string invariants globally
 let latest_data = [];
+// set timer for staleness display
+let stale_timeout = setTimeout(() => {
+  console.clear();
+  console.log(
+    boxen("No new block headers detected.", {
+      title: `Updated: ${new Date().toLocaleTimeString()}`,
+      titleAlignment: "center",
+      borderStyle: "double",
+      padding: 1,
+      float: "center",
+      width: 50,
+    })
+  );
+}, 60 * 1000);
 
 sub.on("data", function (blockHeader) {
-  // can't do anything unless we know the previous blocks data
+  stale_timeout.refresh(); // reset staleness
 
   const utilization = blockHeader.gasUsed / blockHeader.gasLimit;
   // calculate next block base gas using EIP1559
   const next_gas_price =
     blockHeader.baseFeePerGas * (1 + (0.125 * (utilization - 0.5)) / 0.5);
 
-  latest_data = [blockHeader.number, utilization, next_gas_price];
+  latest_data = [blockHeader, utilization, next_gas_price];
 
   // publish latest info highlighted, override previous data
   console.clear();
