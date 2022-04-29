@@ -26,17 +26,11 @@ const connection_timeout = setTimeout(() => {
   // Top level handling
   //
   provider.on("error", (e) => {
-    logbox(
-      `Error | ${new Date().toLocaleTimeString()}`,
-      `Trying to reconnect.\nAttempts: ${connection_attemps}\n`
-    );
+    logbox("Error", `Trying to reconnect.\nAttempts: ${connection_attemps}\n`);
     connection_timeout.refresh();
   });
   provider.on("end", (e) => {
-    logbox(
-      `Error | ${new Date().toLocaleTimeString()}`,
-      `Trying to reconnect.\nAttempts: ${connection_attemps}\n`
-    );
+    logbox("Error", `Trying to reconnect.\nAttempts: ${connection_attemps}\n`);
     connection_timeout.refresh();
   });
   provider.on("connect", () => {
@@ -59,11 +53,11 @@ const infoString = (
   const formatHighlighted = chalk.bgRedBright.bold.whiteBright;
 
   // calculate variables
-  const _blockNumber = blockNumber
+  let _blockNumber = blockNumber
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const _utilization = Math.round(utilization * 100) + "%";
-  const _gasPrice = Math.round((100 * gas_price) / 1e9) / 100 + " Gwei";
+  let _utilization = Math.round(utilization * 100) + "%";
+  let _gasPrice = Math.round((100 * gas_price) / 1e9) / 100 + " Gwei";
 
   // apply formats
   if (highlight) {
@@ -75,26 +69,27 @@ const infoString = (
   }
   return `New Block (${_blockNumber})
 Total Gas Used ${_utilization}
-Upcoming Base Fee will be ${_gasPrice}.
-  `;
+Upcoming Base Fee will be ${_gasPrice}.`;
 };
 
 //
 // screen render
 //
-function logbox(title, str) {
+function logbox(title, str, time_str = new Date().toLocaleTimeString()) {
   global_screen_params = [title, str];
 
   console.clear();
 
-  const box = boxen(str, {
-    title: title,
-    titleAlignment: "center",
-    borderStyle: "double",
-    padding: 1,
-    float: "center",
-    width: 50,
-  });
+  const box =
+    "\n" +
+    boxen(str, {
+      title: `${title} | ${time_str}`,
+      titleAlignment: "center",
+      borderStyle: "double",
+      padding: 1,
+      float: "center",
+      width: 50,
+    });
 
   console.log(box);
 }
@@ -104,29 +99,22 @@ function logbox(title, str) {
 //
 const run = () => {
   sub.on("connected", () => {
-    logbox(
-      `Info | ${new Date().toLocaleTimeString()}`,
-      "Listening for new blocks...\n\n"
-    );
+    logbox("Info", "Listening for new blocks...\n\n");
   });
 
   // prevent race conditions by storing string invariants globally
   let latest_data = [];
   // set timer for staleness display
   let stale_timeout = setTimeout(() => {
-    logbox(
-      `Info | ${new Date().toLocaleTimeString()}`,
-      "No new block headers detected.\nStill listening...\n"
-    );
+    logbox("Info", "No new block headers detected.\nStill listening...\n");
   }, 60 * 1000);
 
   let highlight_timeout = setTimeout(() => {
     if (latest_data.length) {
       logbox(
-        `Block Time| ${new Date(
-          latest_data[0].timestamp * 1000
-        ).toLocaleTimeString()}`,
-        infoString(...latest_data, true)
+        "Block Time",
+        infoString(...latest_data),
+        new Date(latest_data[0].timestamp * 1000).toLocaleTimeString()
       );
     }
   }, 2000);
@@ -143,10 +131,9 @@ const run = () => {
 
     // publish latest info highlighted, override previous data
     logbox(
-      `Block Time | ${new Date(
-        params[0].timestamp * 1000
-      ).toLocaleTimeString()}`,
-      infoString(...params)
+      "Block Time",
+      infoString(...latest_data, true),
+      new Date(latest_data[0].timestamp * 1000).toLocaleTimeString()
     );
     highlight_timeout.refresh();
   });
