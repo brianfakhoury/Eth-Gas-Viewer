@@ -1,64 +1,85 @@
 import Web3 from "web3";
+import net from "net";
 import chalk from "chalk";
 import boxen from "boxen";
 
-// connect to geth websocket.
-// I recommend running $ geth --syncmode "light" --ws
-const web3 = new Web3("ws://127.0.0.1:8546");
-
-let sub = web3.eth.subscribe("newBlockHeaders");
-
-// hide cursor
 process.stdout.write("\u001b[?25l");
+logbox("Boot", "Attempting to connect to client.\n\n");
+// connect to geth .
+// I recommend running $ geth --syncmode "light"
+let provider;
+let web3;
+let sub;
 
-// Console output string builder
-const buildInfoString = ({ number }, utilization, gas_price) =>
-  `New Block (${number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")})
-Total Gas Used ${chalk.bold.redBright(Math.round(utilization * 100) + "%")}
-Upcoming Base Fee will be ${chalk.bold.redBright(
-    Math.round((100 * gas_price) / 1e9) / 100 + " Gwei"
-  )}.
-  `;
+let connection_attemps = 0;
 
-const buildHighlightedInfoString = ({ number }, utilization, gas_price) =>
-  `New Block (${number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")})
-Total Gas Used ${chalk.bgRedBright.bold.whiteBright(
-    Math.round(utilization * 100) + "%"
-  )}
-Upcoming Base Fee will be ${chalk.bgRedBright.bold.whiteBright(
-    Math.round((100 * gas_price) / 1e9) / 100 + " Gwei"
-  )}.
-    `;
-
-const buildConsoleBox = (highlight = false, params) =>
-  boxen(
-    highlight
-      ? buildHighlightedInfoString(...params)
-      : buildInfoString(...params),
-    {
-      title: `Block Time: ${new Date(
-        params[0].timestamp * 1000
-      ).toLocaleTimeString()}`,
-      titleAlignment: "center",
-      borderStyle: "double",
-      padding: 1,
-      float: "center",
-      width: 50,
-    }
+const connection_timeout = setTimeout(() => {
+  provider = new Web3.providers.IpcProvider(
+    "/Users/brianfakhoury/Library/Ethereum/geth.ipc",
+    net
   );
+  web3 = new Web3(provider);
+  sub = web3.eth.subscribe("newBlockHeaders");
+  connection_attemps += 1;
+  //
+  // Top level handling
+  //
+  provider.on("error", (e) => {
+    logbox(
+      `Error: ${new Date().toLocaleTimeString()}`,
+      `Trying to reconnect.\nAttempts: ${connection_attemps}\n`
+    );
+    connection_timeout.refresh();
+  });
+  provider.on("end", (e) => {
+    logbox(
+      `Error: ${new Date().toLocaleTimeString()}`,
+      `Trying to reconnect.\nAttempts: ${connection_attemps}\n`
+    );
+    connection_timeout.refresh();
+  });
+  provider.on("connect", () => run());
+}, 3000);
 
-sub.on("connected", function (subscriptionId) {
-  console.log("Listening for new blocks...\n");
-});
+//
+// pure functions
+//
+const infoString = (
+  { number: blockNumber },
+  utilization,
+  gas_price,
+  highlight = false
+) => {
+  // set chalk formatters
+  const format = chalk.bold.redBright;
+  const formatHighlighted = chalk.bgRedBright.bold.whiteBright;
 
-// prevent race conditions by storing string invariants globally
-let latest_data = [];
-// set timer for staleness display
-let stale_timeout = setTimeout(() => {
+  // calculate variables
+  const _blockNumber = blockNumber
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const _utilization = Math.round(utilization * 100) + "%";
+  const _gasPrice = Math.round((100 * gas_price) / 1e9) / 100 + " Gwei";
+
+  // apply formats
+  if (highlight) {
+    _utilization = formatHighlighted(_utilization);
+    _gasPrice = formatHighlighted(_gasPrice);
+  } else {
+    _utilization = format(_utilization);
+    _gasPrice = format(_gasPrice);
+  }
+  return `New Block (${_blockNumber})
+Total Gas Used ${_utilization}
+Upcoming Base Fee will be ${_gasPrice}.
+  `;
+};
+
+function logbox(title, str) {
   console.clear();
   console.log(
-    boxen("No new block headers detected.", {
-      title: `Updated: ${new Date().toLocaleTimeString()}`,
+    boxen(str, {
+      title: title,
       titleAlignment: "center",
       borderStyle: "double",
       padding: 1,
@@ -66,35 +87,69 @@ let stale_timeout = setTimeout(() => {
       width: 50,
     })
   );
-}, 60 * 1000);
+}
 
-sub.on("data", function (blockHeader) {
-  stale_timeout.refresh(); // reset staleness
+//
+// main event registration
+//
+const run = () => {
+  sub.on("connected", () => {
+    logbox(
+      `Updated: ${new Date().toLocaleTimeString()}`,
+      "Listening for new blocks...\n\n"
+    );
+  });
 
-  const utilization = blockHeader.gasUsed / blockHeader.gasLimit;
-  // calculate next block base gas using EIP1559
-  const next_gas_price =
-    blockHeader.baseFeePerGas * (1 + (0.125 * (utilization - 0.5)) / 0.5);
+  // prevent race conditions by storing string invariants globally
+  let latest_data = [];
+  // set timer for staleness display
+  let stale_timeout = setTimeout(() => {
+    logbox(
+      `Updated: ${new Date().toLocaleTimeString()}`,
+      "No new block headers detected.\nStill listening...\n"
+    );
+  }, 60 * 1000);
 
-  latest_data = [blockHeader, utilization, next_gas_price];
-
-  // publish latest info highlighted, override previous data
-  console.clear();
-  console.log(buildConsoleBox(true, latest_data));
-
-  // remove highlighting after 2000ms
-  // do not use old data if new headers received
-  setTimeout(() => {
-    console.clear();
-    console.log(buildConsoleBox(false, latest_data));
+  let highlight_timeout = setTimeout(() => {
+    if (latest_data.length) {
+      logbox(
+        `Block Time: ${new Date(
+          latest_data[0].timestamp * 1000
+        ).toLocaleTimeString()}`,
+        infoString(...latest_data, true)
+      );
+    }
   }, 2000);
-});
 
-sub.on("error", ({ reason }) => {
-  console.error(reason);
-});
+  sub.on("data", (blockHeader) => {
+    stale_timeout.refresh(); // reset staleness
 
+    const utilization = blockHeader.gasUsed / blockHeader.gasLimit;
+    // calculate next block base gas using EIP1559
+    const next_gas_price =
+      blockHeader.baseFeePerGas * (1 + (0.125 * (utilization - 0.5)) / 0.5);
+
+    latest_data = [blockHeader, utilization, next_gas_price];
+
+    // publish latest info highlighted, override previous data
+    logbox(
+      `Block Time: ${new Date(
+        params[0].timestamp * 1000
+      ).toLocaleTimeString()}`,
+      infoString(...params)
+    );
+    highlight_timeout.refresh();
+  });
+
+  sub.on("error", () => {
+    clearTimeout(stale_timeout);
+    clearTimeout(highlight_timeout);
+  });
+};
+
+//
 // restore hidden cursor for convenience
+//
 process.on("SIGINT", () => {
   process.stdout.write("\u001b[?25h");
   process.exit(2);
