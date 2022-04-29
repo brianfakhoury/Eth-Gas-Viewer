@@ -3,6 +3,7 @@ import net from "net";
 import chalk from "chalk";
 import boxen from "boxen";
 
+let global_screen_params;
 process.stdout.write("\u001b[?25l");
 logbox("Boot", "Attempting to connect to client.\n\n");
 // connect to geth .
@@ -26,19 +27,22 @@ const connection_timeout = setTimeout(() => {
   //
   provider.on("error", (e) => {
     logbox(
-      `Error: ${new Date().toLocaleTimeString()}`,
+      `Error | ${new Date().toLocaleTimeString()}`,
       `Trying to reconnect.\nAttempts: ${connection_attemps}\n`
     );
     connection_timeout.refresh();
   });
   provider.on("end", (e) => {
     logbox(
-      `Error: ${new Date().toLocaleTimeString()}`,
+      `Error | ${new Date().toLocaleTimeString()}`,
       `Trying to reconnect.\nAttempts: ${connection_attemps}\n`
     );
     connection_timeout.refresh();
   });
-  provider.on("connect", () => run());
+  provider.on("connect", () => {
+    connection_attemps = 0;
+    run();
+  });
 }, 3000);
 
 //
@@ -75,27 +79,33 @@ Upcoming Base Fee will be ${_gasPrice}.
   `;
 };
 
+//
+// screen render
+//
 function logbox(title, str) {
+  global_screen_params = [title, str];
+
   console.clear();
-  console.log(
-    boxen(str, {
-      title: title,
-      titleAlignment: "center",
-      borderStyle: "double",
-      padding: 1,
-      float: "center",
-      width: 50,
-    })
-  );
+
+  const box = boxen(str, {
+    title: title,
+    titleAlignment: "center",
+    borderStyle: "double",
+    padding: 1,
+    float: "center",
+    width: 50,
+  });
+
+  console.log(box);
 }
 
 //
-// main event registration
+// main event logic
 //
 const run = () => {
   sub.on("connected", () => {
     logbox(
-      `Updated: ${new Date().toLocaleTimeString()}`,
+      `Info | ${new Date().toLocaleTimeString()}`,
       "Listening for new blocks...\n\n"
     );
   });
@@ -105,7 +115,7 @@ const run = () => {
   // set timer for staleness display
   let stale_timeout = setTimeout(() => {
     logbox(
-      `Updated: ${new Date().toLocaleTimeString()}`,
+      `Info | ${new Date().toLocaleTimeString()}`,
       "No new block headers detected.\nStill listening...\n"
     );
   }, 60 * 1000);
@@ -113,7 +123,7 @@ const run = () => {
   let highlight_timeout = setTimeout(() => {
     if (latest_data.length) {
       logbox(
-        `Block Time: ${new Date(
+        `Block Time| ${new Date(
           latest_data[0].timestamp * 1000
         ).toLocaleTimeString()}`,
         infoString(...latest_data, true)
@@ -133,7 +143,7 @@ const run = () => {
 
     // publish latest info highlighted, override previous data
     logbox(
-      `Block Time: ${new Date(
+      `Block Time | ${new Date(
         params[0].timestamp * 1000
       ).toLocaleTimeString()}`,
       infoString(...params)
@@ -148,8 +158,12 @@ const run = () => {
 };
 
 //
-// restore hidden cursor for convenience
+// process handlers
 //
+process.on("SIGWINCH", () => {
+  logbox(...global_screen_params);
+});
+
 process.on("SIGINT", () => {
   process.stdout.write("\u001b[?25h");
   process.exit(2);
